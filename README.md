@@ -49,9 +49,9 @@ Common commands:
 ## Compatibility Notes
 
 - current release builds have been tested and are working on:
-  - Honor Magic 8 Pro
+  - Honor Magic 8 Pro (Android 16)
   - Shelter-managed work profile
-  - Xiaomi Watch 5
+  - Xiaomi Watch 5 (Wear OS 6.0)
 - forwarding behavior depends on device policy and work-profile behavior
 - background reliability can be affected by OEM battery and background restrictions
 - notification action fidelity depends on how the source app constructs its notifications

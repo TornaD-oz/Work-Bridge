@@ -13,6 +13,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.os.Parcelable
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -20,6 +21,7 @@ import androidx.core.app.Person as CompatPerson
 import androidx.core.app.RemoteInput as CompatRemoteInput
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
 import kotlinx.coroutines.runBlocking
 import java.util.Collections
@@ -267,9 +269,8 @@ class WorkBridgeListenerService : NotificationListenerService() {
         action: Notification.Action,
     ): NotificationCompat.Action? {
         val pendingIntent = action.actionIntent ?: return null
-        val iconCompat = runCatching {
-            action.getIcon()?.let(IconCompat::createFromIcon)
-        }.getOrNull() ?: IconCompat.createWithResource(this, R.drawable.ic_notification_stat)
+        val iconCompat = action.getIcon()?.toCompatActionIcon()
+            ?: IconCompat.createWithResource(this, R.drawable.ic_notification_stat)
         val wrappedPendingIntent = createActionProxyPendingIntent(
             sbn = sbn,
             actionIndex = actionIndex,
@@ -284,7 +285,10 @@ class WorkBridgeListenerService : NotificationListenerService() {
         )
             .addExtras(action.extras)
             .setAllowGeneratedReplies(action.allowGeneratedReplies)
-            .setSemanticAction(action.semanticAction)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            builder.setSemanticAction(action.semanticAction.toCompatSemanticAction())
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setContextual(action.isContextual)
@@ -303,6 +307,30 @@ class WorkBridgeListenerService : NotificationListenerService() {
         }
 
         return builder.build()
+    }
+
+    private fun Icon.toCompatActionIcon(): IconCompat? {
+        return runCatching {
+            loadDrawable(this@WorkBridgeListenerService)
+                ?.toBitmap()
+                ?.let(IconCompat::createWithBitmap)
+        }.getOrNull()
+    }
+
+    private fun Int.toCompatSemanticAction(): Int {
+        return when (this) {
+            Notification.Action.SEMANTIC_ACTION_REPLY -> NotificationCompat.Action.SEMANTIC_ACTION_REPLY
+            Notification.Action.SEMANTIC_ACTION_MARK_AS_READ -> NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ
+            Notification.Action.SEMANTIC_ACTION_MARK_AS_UNREAD -> NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_UNREAD
+            Notification.Action.SEMANTIC_ACTION_DELETE -> NotificationCompat.Action.SEMANTIC_ACTION_DELETE
+            Notification.Action.SEMANTIC_ACTION_ARCHIVE -> NotificationCompat.Action.SEMANTIC_ACTION_ARCHIVE
+            Notification.Action.SEMANTIC_ACTION_MUTE -> NotificationCompat.Action.SEMANTIC_ACTION_MUTE
+            Notification.Action.SEMANTIC_ACTION_UNMUTE -> NotificationCompat.Action.SEMANTIC_ACTION_UNMUTE
+            Notification.Action.SEMANTIC_ACTION_THUMBS_UP -> NotificationCompat.Action.SEMANTIC_ACTION_THUMBS_UP
+            Notification.Action.SEMANTIC_ACTION_THUMBS_DOWN -> NotificationCompat.Action.SEMANTIC_ACTION_THUMBS_DOWN
+            Notification.Action.SEMANTIC_ACTION_CALL -> NotificationCompat.Action.SEMANTIC_ACTION_CALL
+            else -> NotificationCompat.Action.SEMANTIC_ACTION_NONE
+        }
     }
 
     private fun createActionProxyPendingIntent(
@@ -339,17 +367,25 @@ class WorkBridgeListenerService : NotificationListenerService() {
             .setAllowFreeFormInput(allowFreeFormInput)
             .addExtras(extras)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            allowedDataTypes.forEach { mimeType ->
-                builder.setAllowDataType(mimeType, true)
-            }
+        allowedDataTypes.forEach { mimeType ->
+            builder.setAllowDataType(mimeType, true)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setEditChoicesBeforeSending(editChoicesBeforeSending)
+            builder.setEditChoicesBeforeSending(editChoicesBeforeSending.toCompatEditChoicesBeforeSending())
         }
 
         return builder.build()
+    }
+
+    private fun Int.toCompatEditChoicesBeforeSending(): Int {
+        return when (this) {
+            android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_DISABLED ->
+                CompatRemoteInput.EDIT_CHOICES_BEFORE_SENDING_DISABLED
+            android.app.RemoteInput.EDIT_CHOICES_BEFORE_SENDING_ENABLED ->
+                CompatRemoteInput.EDIT_CHOICES_BEFORE_SENDING_ENABLED
+            else -> CompatRemoteInput.EDIT_CHOICES_BEFORE_SENDING_AUTO
+        }
     }
 
     private fun resolveMessagingStyle(original: Notification): NotificationCompat.MessagingStyle? {
@@ -379,14 +415,12 @@ class WorkBridgeListenerService : NotificationListenerService() {
                     }
                 }
 
-                message.sender?.toString()?.trim()?.takeIf(String::isNotBlank)?.let { sender ->
-                    SenderIdentity(name = sender)
-                }
+                null
             }?.let { return it }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val platformMessages = Notification.MessagingStyle.Message.getMessagesFromBundleArray(
-                original.extras?.getParcelableArray(Notification.EXTRA_MESSAGES)
+                original.extras.readNotificationMessages()
             )
             platformMessages
                 .asReversed()
@@ -398,15 +432,24 @@ class WorkBridgeListenerService : NotificationListenerService() {
                             name = name,
                             iconBitmap = sender.icon?.let(::loadBitmapFromIcon),
                         )
-                    } else {
-                        message.sender?.toString()?.trim()?.takeIf(String::isNotBlank)?.let { fallback ->
-                            SenderIdentity(name = fallback)
-                        }
-                    }
+                    } else null
                 }?.let { return it }
         }
 
         return null
+    }
+
+    private fun Bundle?.readNotificationMessages(): Array<Parcelable>? {
+        if (this == null) {
+            return null
+        }
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableArray(Notification.EXTRA_MESSAGES, Parcelable::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableArray(Notification.EXTRA_MESSAGES)
+        }
     }
 
     private fun isSamePerson(person: CompatPerson, other: CompatPerson?): Boolean {
@@ -462,7 +505,7 @@ class WorkBridgeListenerService : NotificationListenerService() {
 
         val width = intrinsicWidth.takeIf { it > 0 } ?: 96
         val height = intrinsicHeight.takeIf { it > 0 } ?: 96
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         setBounds(0, 0, canvas.width, canvas.height)
         draw(canvas)

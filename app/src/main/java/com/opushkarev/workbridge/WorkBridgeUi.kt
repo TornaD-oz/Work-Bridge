@@ -15,15 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AssistChip
@@ -58,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -74,6 +76,12 @@ private enum class RootTab(
     Diagnostics("Diagnostics", Icons.Outlined.Analytics),
     Settings("Settings", Icons.Outlined.Tune),
 }
+
+private const val WORK_BRIDGE_REPOSITORY_URL = "https://github.com/TornaD-oz/Work-Bridge"
+private const val WORK_BRIDGE_DONATE_URL = "https://destream.net/live/TornaDoz/donate"
+private const val WORK_BRIDGE_LICENSE_URL = "$WORK_BRIDGE_REPOSITORY_URL/blob/main/LICENSE"
+private const val WORK_BRIDGE_LICENSE_SUMMARY =
+    "Apache License 2.0. Work Bridge is open source and may be used, modified, and redistributed under the terms of the Apache 2.0 license."
 
 @Composable
 fun WorkBridgeApp(
@@ -128,7 +136,6 @@ fun WorkBridgeApp(
                     )
                 )
                 .padding(innerPadding)
-                .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             when (currentTab) {
                 RootTab.Home -> HomeScreen(
@@ -464,6 +471,7 @@ private fun DiagnosticsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsScreen(
     state: AppPreferencesState,
@@ -472,6 +480,16 @@ private fun SettingsScreen(
     onSetCancelOriginal: suspend (Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
+    val openExternalLink: (String, String) -> Unit = { url, label ->
+        runCatching {
+            uriHandler.openUri(url)
+        }.onFailure {
+            scope.launch {
+                snackbarHostState.showSnackbar("Couldn't open $label.")
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -521,6 +539,67 @@ private fun SettingsScreen(
                 )
             }
         }
+
+        item {
+            ActionSectionCard(
+                title = "About",
+                description = "Version, project links, support, and license details for Work Bridge.",
+            ) {
+                AboutRow(
+                    icon = Icons.Outlined.Info,
+                    title = "Version",
+                    body = BuildConfig.VERSION_NAME,
+                )
+                HorizontalDivider()
+                AboutRow(
+                    icon = Icons.Outlined.Code,
+                    title = "GitHub",
+                    body = WORK_BRIDGE_REPOSITORY_URL,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            openExternalLink(
+                                WORK_BRIDGE_REPOSITORY_URL,
+                                "the GitHub repository",
+                            )
+                        },
+                    ) {
+                        Text("Open GitHub")
+                    }
+                    Button(
+                        onClick = {
+                            openExternalLink(
+                                WORK_BRIDGE_DONATE_URL,
+                                "the donation page",
+                            )
+                        },
+                    ) {
+                        Text("Donate")
+                    }
+                }
+                HorizontalDivider()
+                AboutRow(
+                    icon = Icons.Outlined.Gavel,
+                    title = "License",
+                    body = WORK_BRIDGE_LICENSE_SUMMARY,
+                )
+                TextButton(
+                    onClick = {
+                        openExternalLink(
+                            WORK_BRIDGE_LICENSE_URL,
+                            "the license page",
+                        )
+                    },
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text("View full license")
+                }
+            }
+        }
     }
 }
 
@@ -529,9 +608,10 @@ private fun HeroCard(
     label: String? = null,
     title: String,
     description: String,
+    compact: Boolean = false,
 ) {
     Card(
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedCornerShape(if (compact) 24.dp else 32.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
     ) {
         Box(
@@ -545,25 +625,40 @@ private fun HeroCard(
                         )
                     )
                 )
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(
+                    horizontal = if (compact) 16.dp else 20.dp,
+                    vertical = if (compact) 14.dp else 18.dp,
+                ),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)) {
                     if (label != null) {
                         Text(
                             text = label.uppercase(Locale.getDefault()),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = if (compact) {
+                                MaterialTheme.typography.labelMedium
+                            } else {
+                                MaterialTheme.typography.labelLarge
+                            },
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.76f),
                         )
                     }
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = if (compact) {
+                            MaterialTheme.typography.titleLarge
+                        } else {
+                            MaterialTheme.typography.headlineMedium
+                        },
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Text(
                         text = description,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = if (compact) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            MaterialTheme.typography.bodyLarge
+                        },
                         color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.92f),
                     )
                 }
@@ -595,29 +690,41 @@ private fun StatusOverviewCard(runtimeSnapshot: RuntimeSnapshot) {
 private fun ActionSectionCard(
     title: String,
     description: String? = null,
+    compact: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(if (compact) 20.dp else 24.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 16.dp else 20.dp,
+                vertical = if (compact) 16.dp else 20.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 14.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (compact) {
+                    MaterialTheme.typography.titleSmall
+                } else {
+                    MaterialTheme.typography.titleLarge
+                },
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (description != null) {
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = if (compact) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -821,9 +928,50 @@ private fun SettingsToggleRow(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun AboutRow(
+    icon: ImageVector,
+    title: String,
+    body: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(10.dp),
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -833,7 +981,6 @@ private fun SettingsToggleRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

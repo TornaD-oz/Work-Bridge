@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Work Bridge</string>
+    <string name="service_label">Work Bridge listener</string>
+</resources>

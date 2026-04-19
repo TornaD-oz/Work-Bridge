@@ -17,6 +17,7 @@ captures/
 .kotlin/
 *.aab
 *.apk
+*.dm
 output-metadata.json
 
 # IntelliJ

@@ -6,7 +6,8 @@ Work Bridge forwards selected work-profile notifications into your personal prof
 
 It is built for Android setups where important work alerts should stay visible on the personal side without giving up tap-through actions, replies, or troubleshooting tools.
 
-![Work Bridge Bridge tab screenshot](docs/images/bridge-tab.jpg)
+<!--suppress CheckImageSize -->
+<img src="docs/images/bridge-tab.jpg" width="320" alt="main-tab-screenshot">
 
 ## Why It Exists
 
@@ -54,3 +55,7 @@ Common commands:
 ## Releases
 
 APK builds are distributed through GitHub Releases.
+
+## Support
+
+If Work Bridge is useful to you and you'd like to support its developer, you can send a donation on [DeStream](https://destream.net/live/TornaDoz/donate).
